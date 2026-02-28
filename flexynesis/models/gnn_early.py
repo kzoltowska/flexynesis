@@ -12,8 +12,6 @@ from torch.utils.data import DataLoader
 
 from captum.attr import IntegratedGradients, GradientShap
 
-from sklearn.utils.class_weight import compute_class_weight
-
 from ..utils import to_device_safe
 from ..modules import MLP, cox_ph_loss, flexGCN
 
