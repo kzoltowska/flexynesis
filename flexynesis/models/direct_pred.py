@@ -31,7 +31,7 @@ class DirectPred(pl.LightningModule):
     """
 
     def __init__(self, config, dataset, target_variables, batch_variables = None, 
-                 surv_event_var = None, surv_time_var = None, use_loss_weighting = True,
+                 surv_event_var = None, surv_time_var = None, use_loss_weighting = True, use_class_weights=False,
                 device_type = None):
         super(DirectPred, self).__init__()
         self.config = config
@@ -46,7 +46,9 @@ class DirectPred(pl.LightningModule):
         self.variables = self.target_variables + batch_variables if batch_variables else self.target_variables
         self.feature_importances = {}
         self.use_loss_weighting = use_loss_weighting
+        self.use_class_weights = use_class_weights
         self.device_type = device_type
+        self.class_weights = getattr(dataset, 'class_weights', {})
         
         if self.use_loss_weighting:
             # Initialize log variance parameters for uncertainty weighting
@@ -58,6 +60,19 @@ class DirectPred(pl.LightningModule):
         self.ann = dataset.ann
         self.layers = list(dataset.dat.keys())
         self.input_dims = [len(dataset.features[self.layers[i]]) for i in range(len(self.layers))]
+
+        # Validate consistency between flag and available weights
+        if self.use_class_weights:
+            categorical_vars = [v for v in self.variables if self.variable_types.get(v) == 'categorical']
+            missing = [v for v in categorical_vars if v not in self.class_weights]
+            if missing:
+                raise ValueError(
+                    f"[ERROR] use_class_weights=True but class weights were not found for: {missing}. "
+                    f"Make sure DataImporter was initialized with use_class_weights=True and "
+                    f"compute_class_weights() was called before passing the dataset to the model."
+                )
+            else:
+                print(f"[INFO] Using precomputed class weights for: {list(self.class_weights.keys())}")
 
         self.encoders = nn.ModuleList([
             MLP(input_dim=self.input_dims[i],
@@ -153,7 +168,12 @@ class DirectPred(pl.LightningModule):
             if valid_indices.sum() > 0:  # only calculate loss if there are valid targets
                 y_hat = y_hat[valid_indices]
                 y = y[valid_indices]
-                loss = F.cross_entropy(y_hat, y.long())
+
+                if self.use_class_weights and var in self.class_weights:
+                    weight_tensor = self.class_weights[var].to(y_hat.device)
+                    loss = F.cross_entropy(y_hat, y.long(), weight=weight_tensor)
+                else:
+                    loss = F.cross_entropy(y_hat, y.long())
             else: 
                 loss = torch.tensor(0.0, device=y_hat.device, requires_grad=True)
         return loss

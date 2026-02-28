@@ -20,6 +20,8 @@ from sklearn.preprocessing import OrdinalEncoder, StandardScaler, MinMaxScaler, 
 from .feature_selection import filter_by_laplacian
 from .utils import get_variable_types, create_covariate_matrix
 
+from sklearn.utils.class_weight import compute_class_weight
+
 from itertools import chain
 
 
@@ -93,7 +95,7 @@ class DataImporter:
     """
 
     def __init__(self, path, data_types, covariates = None, processed_dir="processed", log_transform = False, concatenate = False, restrict_to_features = None, min_features=None,
-                 top_percentile=20, correlation_threshold = 0.9, variance_threshold=0.01, na_threshold=0.1, downsample=0):
+                 top_percentile=20, correlation_threshold = 0.9, variance_threshold=0.01, na_threshold=0.1, downsample=0, use_class_weights=False):
         self.path = path
         self.data_types = data_types
         self.processed_dir = os.path.join(self.path, processed_dir)
@@ -112,6 +114,7 @@ class DataImporter:
         self.transformers = None
         self.downsample = downsample
         self.covariates = covariates
+        self.use_class_weights=use_class_weights
 
         # read user-specified feature list to restrict the analysis to that
         self.restrict_to_features = restrict_to_features
@@ -210,6 +213,14 @@ class DataImporter:
         # Save final feature lists AFTER concatenation (for inference mode)
         self.train_features = training_dataset.features.copy()
 
+        # compute class weights from full training set and attach to dataset object
+        # must be after concatenation so training_dataset is in its final state
+        if self.use_class_weights:
+            self.compute_class_weights(training_dataset)
+            training_dataset.class_weights = self.class_weights
+        else:
+            self.class_weights = {}
+            training_dataset.class_weights = {}
 
         print("[INFO] Training Data Stats: ", training_dataset.get_dataset_stats())
         print("[INFO] Test Data Stats: ", testing_dataset.get_dataset_stats())
@@ -457,6 +468,40 @@ class DataImporter:
 
         return df_encoded, variable_types, label_mappings
 
+    def compute_class_weights(self, training_dataset):
+        """
+        Computes class weights for all categorical variables using sklearn's 'balanced' method.
+        Weights are computed from the full training set and stored in self.class_weights as a
+        dict of {variable_name: torch.Tensor of shape (num_classes,)}.
+        Should be called once after the training dataset is built.
+        """
+        self.class_weights = {}
+        for var, var_type in training_dataset.variable_types.items():
+            if var_type == "categorical":
+                y = training_dataset.ann[var].numpy()
+                # Exclude missing values encoded as -1
+                valid_mask = (y != -1) & ~np.isnan(y)
+                y_valid = y[valid_mask].astype(int)
+
+                if len(y_valid) == 0:
+                    print(f"[WARNING] No valid labels for variable '{var}', skipping class weight computation.")
+                    continue
+
+                classes = np.unique(y_valid)
+                weights = compute_class_weight(
+                    class_weight="balanced",
+                    classes=classes,
+                    y=y_valid
+                )
+                # Build full weight tensor aligned to class indices (0..num_classes-1)
+                num_classes = len(classes)  # or derive from label_mappings if you have it
+                weight_tensor = torch.ones(num_classes, dtype=torch.float)
+                for cls, w in zip(classes, weights):
+                    weight_tensor[cls] = w
+
+                self.class_weights[var] = weight_tensor
+                
+                print(f"[INFO] Class weights for '{var}': { {int(c): round(w, 4) for c, w in zip(classes, weights)} }")
 
     def validate_input_data(self, train_dat, test_dat):
         print("\n[INFO] ----------------- Checking for problems with the input data ----------------- ")

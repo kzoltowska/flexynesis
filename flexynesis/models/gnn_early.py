@@ -12,6 +12,8 @@ from torch.utils.data import DataLoader
 
 from captum.attr import IntegratedGradients, GradientShap
 
+from sklearn.utils.class_weight import compute_class_weight
+
 from ..utils import to_device_safe
 from ..modules import MLP, cox_ph_loss, flexGCN
 
@@ -64,7 +66,8 @@ class GNN(pl.LightningModule):
         surv_time_var=None,
         use_loss_weighting=True,
         device_type = None,
-        gnn_conv_type = None 
+        gnn_conv_type = None,
+        use_class_weights = False
     ):
         super().__init__()
         self.config = config
@@ -83,7 +86,8 @@ class GNN(pl.LightningModule):
         
         self.feature_importances = {}
         self.use_loss_weighting = use_loss_weighting
-
+        self.use_class_weights = use_class_weights
+        self.class_weights = getattr(dataset, 'class_weights', {})
         self.device_type = device_type 
         self.gnn_conv_type = gnn_conv_type
         
@@ -97,6 +101,19 @@ class GNN(pl.LightningModule):
             for var in self.variables:
                 self.log_vars[var] = nn.Parameter(torch.zeros(1))
         
+        # Validate consistency between flag and available weights
+        if self.use_class_weights:
+            categorical_vars = [v for v in self.variables if self.variable_types.get(v) == 'categorical']
+            missing = [v for v in categorical_vars if v not in self.class_weights]
+            if missing:
+                raise ValueError(
+                    f"[ERROR] use_class_weights=True but class weights were not found for: {missing}. "
+                    f"Make sure DataImporter was initialized with use_class_weights=True and "
+                    f"compute_class_weights() was called before passing the dataset to the model."
+                )
+            else:
+                print(f"[INFO] Using precomputed class weights for: {list(self.class_weights.keys())}")
+
         self.encoders = nn.ModuleList([ 
             flexGCN(
                 node_count = dataset[0][0].shape[0], #number of nodes
@@ -242,15 +259,21 @@ class GNN(pl.LightningModule):
             else:
                 loss = torch.tensor(0.0, device=y_hat.device, requires_grad=True)  # if no valid labels, set loss to 0
         else:
-            # Ignore instances with missing labels for categorical variables
-            # Assuming that missing values were encoded as -1
+        # Ignore instances with missing labels for categorical variables
+        # Assuming that missing values were encoded as -1
             valid_indices = (y != -1) & (~torch.isnan(y))
             if valid_indices.sum() > 0:  # only calculate loss if there are valid targets
                 y_hat = y_hat[valid_indices]
                 y = y[valid_indices]
-                loss = F.cross_entropy(y_hat, y.long())
+
+                if self.use_class_weights and var in self.class_weights:
+                    weight_tensor = self.class_weights[var].to(y_hat.device)
+                    loss = F.cross_entropy(y_hat, y.long(), weight=weight_tensor)
+                else:
+                    loss = F.cross_entropy(y_hat, y.long())
             else:
                 loss = torch.tensor(0.0, device=y_hat.device, requires_grad=True)
+
         return loss
 
     def compute_total_loss(self, losses):

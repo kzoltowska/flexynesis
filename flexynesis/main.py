@@ -78,7 +78,8 @@ class HyperparameterTuning:
                  batch_variables = None, surv_event_var = None, surv_time_var = None, 
                  n_iter = 10, config_path = None, plot_losses = False,
                  val_size = 0.2,  use_cv = False, cv_splits = 5, 
-                 use_loss_weighting = True, early_stop_patience = -1,
+                 use_loss_weighting = True,
+                 use_class_weights = False, early_stop_patience = -1,
                  device_type = None, gnn_conv_type = None, 
                  input_layers = None, output_layers = None, num_workers = 2):
         self.dataset = dataset # dataset for model initiation
@@ -106,6 +107,7 @@ class HyperparameterTuning:
                                     progress_bar_finished='red'))
         self.early_stop_patience = early_stop_patience
         self.use_loss_weighting = use_loss_weighting
+        self.use_class_weights = use_class_weights
         self.gnn_conv_type = gnn_conv_type
         self.input_layers = input_layers
         self.output_layers = output_layers 
@@ -194,6 +196,7 @@ class HyperparameterTuning:
             "surv_time_var": self.surv_time_var,
             "use_loss_weighting": self.use_loss_weighting,
             "device_type": self.device_type,
+            "use_class_weights": self.use_class_weights
         }
         
         if self.model_class.__name__ == 'GNN':
