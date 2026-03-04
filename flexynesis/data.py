@@ -17,6 +17,7 @@ from tqdm import tqdm
 
 
 from sklearn.preprocessing import OrdinalEncoder, StandardScaler, MinMaxScaler, PowerTransformer
+from imblearn.over_sampling import SMOTE
 from .feature_selection import filter_by_laplacian
 from .utils import get_variable_types, create_covariate_matrix
 
@@ -95,7 +96,7 @@ class DataImporter:
     """
 
     def __init__(self, path, data_types, covariates = None, processed_dir="processed", log_transform = False, concatenate = False, restrict_to_features = None, min_features=None,
-                 top_percentile=20, correlation_threshold = 0.9, variance_threshold=0.01, na_threshold=0.1, downsample=0, use_class_weights=False):
+                 top_percentile=20, correlation_threshold = 0.9, variance_threshold=0.01, na_threshold=0.1, downsample=0, use_class_weights=False, smote=False):
         self.path = path
         self.data_types = data_types
         self.processed_dir = os.path.join(self.path, processed_dir)
@@ -115,6 +116,7 @@ class DataImporter:
         self.downsample = downsample
         self.covariates = covariates
         self.use_class_weights=use_class_weights
+        self.smote=smote
 
         # read user-specified feature list to restrict the analysis to that
         self.restrict_to_features = restrict_to_features
@@ -188,6 +190,10 @@ class DataImporter:
         # learned from training data to apply on test data (see fit = False)
         train_dat = self.normalize_data(train_dat, scaler_type="standard", fit=True)
         test_dat = self.normalize_data(test_dat, scaler_type="standard", fit=False)
+
+        # Handle class imbalance with SMOTE
+        if self.smote:
+            train_dat, train_ann = self.smote_data(train_dat, train_ann)
 
         # if covariates are defined, create a covariate matrix and add to the dictionary of data matrices
         if self.covariates:
@@ -423,6 +429,38 @@ class DataImporter:
                                            columns=data[x].index).T
                            for x in data.keys()}
         return normalized_data
+    
+    def smote_data(self, data, ann):
+        print("\n[INFO] ----------------- Applying SMOTE ----------------- ")
+        target_col = ann.columns[0]
+        target = ann[target_col]
+
+        smoted_data = {}
+        resampled_index = None
+
+        for x in data.keys():
+            X = data[x].T  # (n_samples, n_features)
+            smote = SMOTE(random_state=42)
+            X_resampled, target_resampled = smote.fit_resample(X, target)
+
+            n_resampled = X_resampled.shape[0]
+            new_index = [f"smote_{i}" for i in range(n_resampled)]
+
+            smoted_data[x] = pd.DataFrame(
+                X_resampled.T,
+                index=data[x].index,
+                columns=new_index
+            )
+            resampled_index = new_index
+
+        resampled_ann = pd.DataFrame({target_col: target_resampled}, index=resampled_index)
+        for col in ann.columns:
+            if col not in resampled_ann.columns:
+                resampled_ann[col] = float('nan')
+        resampled_ann = resampled_ann[ann.columns]
+
+        print(f"[INFO] SMOTE complete: {len(target)} → {len(target_resampled)} samples")
+        return smoted_data, resampled_ann
 
     def get_torch_dataset(self, dat, ann, samples):
 
