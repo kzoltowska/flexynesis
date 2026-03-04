@@ -96,7 +96,8 @@ class DataImporter:
     """
 
     def __init__(self, path, data_types, covariates = None, processed_dir="processed", log_transform = False, concatenate = False, restrict_to_features = None, min_features=None,
-                 top_percentile=20, correlation_threshold = 0.9, variance_threshold=0.01, na_threshold=0.1, downsample=0, use_class_weights=False, smote=False):
+                 top_percentile=20, correlation_threshold = 0.9, variance_threshold=0.01, na_threshold=0.1, downsample=0, use_class_weights=False, smote=False,
+                 smote_k_neighbors=5):
         self.path = path
         self.data_types = data_types
         self.processed_dir = os.path.join(self.path, processed_dir)
@@ -117,6 +118,7 @@ class DataImporter:
         self.covariates = covariates
         self.use_class_weights=use_class_weights
         self.smote=smote
+        self.smote_k_neighbors=smote_k_neighbors
 
         # read user-specified feature list to restrict the analysis to that
         self.restrict_to_features = restrict_to_features
@@ -440,7 +442,7 @@ class DataImporter:
 
         for x in data.keys():
             X = data[x].T  # (n_samples, n_features)
-            smote = SMOTE(random_state=42)
+            smote = SMOTE(random_state=42, k_neighbors=self.smote_k_neighbors)
             X_resampled, target_resampled = smote.fit_resample(X, target)
 
             n_resampled = X_resampled.shape[0]
