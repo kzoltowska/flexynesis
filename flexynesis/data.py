@@ -97,7 +97,7 @@ class DataImporter:
 
     def __init__(self, path, data_types, covariates = None, processed_dir="processed", log_transform = False, concatenate = False, restrict_to_features = None, min_features=None,
                  top_percentile=20, correlation_threshold = 0.9, variance_threshold=0.01, na_threshold=0.1, downsample=0, use_class_weights=False, smote=False,
-                 smote_k_neighbors=5):
+                 smote_k_neighbors=5, scaler_type="standard"):
         self.path = path
         self.data_types = data_types
         self.processed_dir = os.path.join(self.path, processed_dir)
@@ -119,6 +119,7 @@ class DataImporter:
         self.use_class_weights=use_class_weights
         self.smote=smote
         self.smote_k_neighbors=smote_k_neighbors
+        self.scaler_type=scaler_type
 
         # read user-specified feature list to restrict the analysis to that
         self.restrict_to_features = restrict_to_features
@@ -190,8 +191,8 @@ class DataImporter:
 
         # Normalize the training data (for testing data, use normalisation factors
         # learned from training data to apply on test data (see fit = False)
-        train_dat = self.normalize_data(train_dat, scaler_type="standard", fit=True)
-        test_dat = self.normalize_data(test_dat, scaler_type="standard", fit=False)
+        train_dat = self.normalize_data(train_dat, scaler_type=self.scaler_type, fit=True)
+        test_dat = self.normalize_data(test_dat, scaler_type=self.scaler_type, fit=False)
 
         # Handle class imbalance with SMOTE
         if self.smote:
@@ -420,8 +421,10 @@ class DataImporter:
         # while scaling methods assume features to be on the columns.
         if fit:
             if scaler_type == "standard":
+                print("Applying standard scaler")
                 self.scalers = {x: StandardScaler().fit(data[x].T) for x in data.keys()}
             elif scaler_type == "min_max":
+                print("Applying min_max scaler")
                 self.scalers = {x: MinMaxScaler().fit(data[x].T) for x in data.keys()}
             else:
                 raise ValueError("Invalid scaler_type. Choose 'standard' or 'min_max'.")
