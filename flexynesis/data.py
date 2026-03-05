@@ -97,7 +97,7 @@ class DataImporter:
 
     def __init__(self, path, data_types, covariates = None, processed_dir="processed", log_transform = False, concatenate = False, restrict_to_features = None, min_features=None,
                  top_percentile=20, correlation_threshold = 0.9, variance_threshold=0.01, na_threshold=0.1, downsample=0, use_class_weights=False, smote=False,
-                 smote_k_neighbors=5, scaler_type="standard"):
+                 smote_k_neighbors=5, scaler_type="standard", target_variables=None):
         self.path = path
         self.data_types = data_types
         self.processed_dir = os.path.join(self.path, processed_dir)
@@ -120,6 +120,7 @@ class DataImporter:
         self.smote=smote
         self.smote_k_neighbors=smote_k_neighbors
         self.scaler_type=scaler_type
+        self.target_variables=target_variables
 
         # read user-specified feature list to restrict the analysis to that
         self.restrict_to_features = restrict_to_features
@@ -436,8 +437,16 @@ class DataImporter:
         return normalized_data
     
     def smote_data(self, data, ann):
-        print("\n[INFO] ----------------- Applying SMOTE ----------------- ")
-        target_col = ann.columns[0]
+    # use first target variable if specified, otherwise fall back to first column
+        if self.target_variables:
+            # pick first categorical target variable
+            target_col = next(
+                (v for v in self.target_variables if v in ann.columns),
+                ann.columns[0]
+            )
+        else:
+            target_col = ann.columns[0]
+        
         target = ann[target_col]
 
         smoted_data = {}
