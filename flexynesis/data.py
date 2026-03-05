@@ -198,6 +198,10 @@ class DataImporter:
         # Handle class imbalance with SMOTE
         if self.smote:
             train_dat, train_ann = self.smote_data(train_dat, train_ann)
+            train_samples=list(train_ann.index)
+            # add temporarily after smote line in import_data
+            print(f"[DEBUG] train_ann value counts after SMOTE:\n{train_ann['COHORT_curated'].value_counts()}")
+            print(f"[DEBUG] train_ann dtype: {train_ann['COHORT_curated'].dtype}")
 
         # if covariates are defined, create a covariate matrix and add to the dictionary of data matrices
         if self.covariates:
