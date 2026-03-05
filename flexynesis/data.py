@@ -442,49 +442,64 @@ class DataImporter:
         return normalized_data
     
     def smote_data(self, data, ann):
-    # use first target variable if specified, otherwise fall back to first column
+        print("\n[INFO] ----------------- Applying SMOTE ----------------- ")
+        
+        # guard against string instead of list
+        if isinstance(self.target_variables, str):
+            self.target_variables = [self.target_variables]
+        
+        # pick the right target column
         if self.target_variables:
-            # pick first categorical target variable
             target_col = next(
                 (v for v in self.target_variables if v in ann.columns),
-                ann.columns[0]
+                None
             )
+            if target_col is None:
+                print(f"[WARNING] None of target_variables {self.target_variables} found in ann columns {ann.columns.tolist()}. Skipping SMOTE.")
+                return data, ann
         else:
             target_col = ann.columns[0]
         
-        target = ann[target_col]
-
+        target = ann[target_col].copy()
+        print(f"[INFO] SMOTE target column: {target_col}")
+        print(f"[INFO] Class distribution before SMOTE:\n{target.value_counts()}")
+        
+        # adjust k_neighbors safely based on minority class size
+        min_class_count = target.value_counts().min()
+        safe_k = min(self.smote_k_neighbors, min_class_count - 1)
+        if safe_k < 1:
+            print(f"[WARNING] Minority class has only {min_class_count} sample(s). Skipping SMOTE.")
+            return data, ann
+        if safe_k < self.smote_k_neighbors:
+            print(f"[WARNING] Reducing k_neighbors from {self.smote_k_neighbors} to {safe_k} due to small minority class ({min_class_count} samples)")
+        
+        # run SMOTE on each data layer
         smoted_data = {}
-        resampled_index = None
-
+        target_resampled = None
+        
         for x in data.keys():
             X = data[x].T  # (n_samples, n_features)
-            smote = SMOTE(random_state=42, k_neighbors=self.smote_k_neighbors)
+            smote = SMOTE(random_state=42, k_neighbors=safe_k)
             X_resampled, target_resampled = smote.fit_resample(X, target)
-
             n_resampled = X_resampled.shape[0]
             new_index = [f"smote_{i}" for i in range(n_resampled)]
-
             smoted_data[x] = pd.DataFrame(
                 X_resampled.T,
                 index=data[x].index,
                 columns=new_index
             )
-            resampled_index = new_index
-
-        resampled_ann = pd.DataFrame(index=resampled_index, columns=ann.columns)
-        resampled_ann[target_col] = target_resampled
-        # fill all other columns with NaN (they can't be meaningfully synthesized)
+        
+        # build resampled_ann fresh — assign values directly, no reindexing tricks
+        new_index = [f"smote_{i}" for i in range(len(target_resampled))]
+        resampled_ann = pd.DataFrame(index=new_index, columns=ann.columns, dtype=object)
+        resampled_ann[target_col] = list(target_resampled)  # explicit list assignment
         for col in ann.columns:
             if col != target_col:
-                resampled_ann[col] = float('nan')
-
+                resampled_ann[col] = np.nan
+        
         print(f"[INFO] SMOTE complete: {len(target)} → {len(target_resampled)} samples")
-        print(f"[DEBUG] ann.columns: {ann.columns.tolist()}")
-        print(f"[DEBUG] target_col: {target_col}")
-        print(f"[DEBUG] target_resampled unique: {np.unique(target_resampled)}")
-        print(f"[DEBUG] resampled_ann shape: {resampled_ann.shape}")
-        print(f"[DEBUG] resampled_ann head:\n{resampled_ann.head()}")
+        print(f"[INFO] Class distribution after SMOTE:\n{resampled_ann[target_col].value_counts()}")
+        
         return smoted_data, resampled_ann
 
     def get_torch_dataset(self, dat, ann, samples):
