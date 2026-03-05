@@ -202,6 +202,7 @@ class DataImporter:
             # add temporarily after smote line in import_data
             print(f"[DEBUG] train_ann value counts after SMOTE:\n{train_ann['COHORT_curated'].value_counts()}")
             print(f"[DEBUG] train_ann dtype: {train_ann['COHORT_curated'].dtype}")
+            
 
         # if covariates are defined, create a covariate matrix and add to the dictionary of data matrices
         if self.covariates:
@@ -478,6 +479,11 @@ class DataImporter:
         resampled_ann = resampled_ann[ann.columns]
 
         print(f"[INFO] SMOTE complete: {len(target)} → {len(target_resampled)} samples")
+        print(f"[DEBUG] ann.columns: {ann.columns.tolist()}")
+        print(f"[DEBUG] target_col: {target_col}")
+        print(f"[DEBUG] target_resampled unique: {np.unique(target_resampled)}")
+        print(f"[DEBUG] resampled_ann shape: {resampled_ann.shape}")
+        print(f"[DEBUG] resampled_ann head:\n{resampled_ann.head()}")
         return smoted_data, resampled_ann
 
     def get_torch_dataset(self, dat, ann, samples):
