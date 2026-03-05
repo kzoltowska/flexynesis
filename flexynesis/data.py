@@ -528,7 +528,12 @@ class DataImporter:
         Should be called once after the training dataset is built.
         """
         self.class_weights = {}
+        # only compute weights for actual target variables, not IDs or batch vars
+        target_vars = self.target_variables if self.target_variables else training_dataset.variable_types.keys()
+        
         for var, var_type in training_dataset.variable_types.items():
+            if var not in target_vars:  # skip participant_id and anything not a target
+                continue
             if var_type == "categorical":
                 y = training_dataset.ann[var].numpy()
                 # Exclude missing values encoded as -1
