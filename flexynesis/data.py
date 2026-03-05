@@ -472,11 +472,12 @@ class DataImporter:
             )
             resampled_index = new_index
 
-        resampled_ann = pd.DataFrame({target_col: target_resampled}, index=resampled_index)
+        resampled_ann = pd.DataFrame(index=resampled_index, columns=ann.columns)
+        resampled_ann[target_col] = target_resampled
+        # fill all other columns with NaN (they can't be meaningfully synthesized)
         for col in ann.columns:
-            if col not in resampled_ann.columns:
+            if col != target_col:
                 resampled_ann[col] = float('nan')
-        resampled_ann = resampled_ann[ann.columns]
 
         print(f"[INFO] SMOTE complete: {len(target)} → {len(target_resampled)} samples")
         print(f"[DEBUG] ann.columns: {ann.columns.tolist()}")
