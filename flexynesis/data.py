@@ -481,38 +481,57 @@ class DataImporter:
             return data, ann
         if safe_k < self.smote_k_neighbors:
             print(f"[WARNING] Reducing k_neighbors from {self.smote_k_neighbors} to {safe_k} due to small minority class ({min_class_count} samples)")
+
+        # use the first data layer to fit SMOTE and get the resampled index
+        # all layers must be resampled with the same random state so order is identical
+        first_key = list(data.keys())[0]
         
-        # run SMOTE on each data layer
+        # ensure ann and data are aligned before SMOTE
+        data_samples = list(data[first_key].columns)
+        ann = ann.loc[data_samples]  # align ann to data column order
+        target = ann[target_col].copy()  # re-extract after alignment
+        
         smoted_data = {}
         target_resampled = None
+        n_resampled = None
         
         for x in data.keys():
-            X = data[x].T  # (n_samples, n_features)
+            # ensure this layer's columns match ann index
+            X = data[x][data_samples].T  # (n_samples, n_features) — explicit column order
             smote = SMOTE(random_state=42, k_neighbors=safe_k)
             X_resampled, target_resampled = smote.fit_resample(X, target)
             n_resampled = X_resampled.shape[0]
+            
+            # create consistent new index
             new_index = [f"smote_{i}" for i in range(n_resampled)]
+            
             smoted_data[x] = pd.DataFrame(
-                X_resampled.T,
-                index=data[x].index,
-                columns=new_index
+                X_resampled.T,       # back to (n_features, n_samples)
+                index=data[x].index, # keep original feature names
+                columns=new_index    # consistent sample index
             )
-        
-        # build resampled_ann fresh — assign values directly, no reindexing tricks
-        new_index = [f"smote_{i}" for i in range(len(target_resampled))]
-        resampled_ann = pd.DataFrame(index=new_index, columns=ann.columns, dtype=object)
-        resampled_ann[target_col] = list(target_resampled)  # explicit list assignment
-        for col in ann.columns:
-            if col != target_col:
-                resampled_ann[col] = np.nan
-        
-        print(f"[INFO] SMOTE complete: {len(target)} → {len(target_resampled)} samples")
-        print(f"[INFO] Class distribution after SMOTE:\n{resampled_ann[target_col].value_counts()}")
-        for x in smoted_data.keys():
+            
+            # check for NaNs introduced by SMOTE
             nan_count = smoted_data[x].isna().sum().sum()
             if nan_count > 0:
                 print(f"[WARNING] {nan_count} NaN values in SMOTE output for layer {x}, filling with 0")
                 smoted_data[x] = smoted_data[x].fillna(0)
+
+        # build resampled_ann with SAME index as smoted_data columns
+        new_index = [f"smote_{i}" for i in range(n_resampled)]
+        resampled_ann = pd.DataFrame(index=new_index, columns=ann.columns, dtype=object)
+        resampled_ann[target_col] = list(target_resampled)
+        for col in ann.columns:
+            if col != target_col:
+                resampled_ann[col] = np.nan
+
+        # verify alignment before returning
+        assert list(smoted_data[first_key].columns) == list(resampled_ann.index), \
+            "[ERROR] SMOTE data columns and ann index are misaligned!"
+
+        print(f"[INFO] SMOTE complete: {len(target)} → {n_resampled} samples")
+        print(f"[INFO] Class distribution after SMOTE:\n{resampled_ann[target_col].value_counts()}")
+        
         return smoted_data, resampled_ann
 
     def get_torch_dataset(self, dat, ann, samples):
