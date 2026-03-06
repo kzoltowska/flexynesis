@@ -212,6 +212,11 @@ class DataImporter:
             # harmonize again to match the covariate features
             train_dat, test_dat = self.harmonize(train_dat, test_dat)
 
+        print(f"[DEBUG] train_ann columns: {train_ann.columns.tolist()}")
+        print(f"[DEBUG] train_ann COHORT_curated unique: {train_ann['COHORT_curated'].unique()}")
+        print(f"[DEBUG] train_ann COHORT_curated dtype: {train_ann['COHORT_curated'].dtype}")
+        print(f"[DEBUG] train_ann shape: {train_ann.shape}")    
+
         # encode the variable annotations, convert data matrices and annotations pytorch datasets
         training_dataset = self.get_torch_dataset(train_dat, train_ann, train_samples)
         testing_dataset = self.get_torch_dataset(test_dat, test_ann, test_samples)
@@ -508,6 +513,8 @@ class DataImporter:
         dat = {x: torch.from_numpy(np.array(dat[x].T)).float() for x in dat.keys()}
 
         ann, variable_types, label_mappings = self.encode_labels(ann)
+        print(f"[DEBUG] after encode_labels COHORT_curated unique: {ann['COHORT_curated'].unique()}")
+        print(f"[DEBUG] variable_types: {variable_types}")
 
         # Convert DataFrame to tensor with MPS-compatible dtypes
         ann = {col: torch.from_numpy(ann[col].values).float() if ann[col].dtype in ['float64', 'float32']
