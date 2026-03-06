@@ -217,6 +217,10 @@ class DataImporter:
         print(f"[DEBUG] train_ann COHORT_curated dtype: {train_ann['COHORT_curated'].dtype}")
         print(f"[DEBUG] train_ann shape: {train_ann.shape}")    
 
+        if self.target_variables:
+            train_ann = train_ann[[c for c in self.target_variables if c in train_ann.columns]]
+            test_ann = test_ann[[c for c in self.target_variables if c in test_ann.columns]]
+
         # encode the variable annotations, convert data matrices and annotations pytorch datasets
         training_dataset = self.get_torch_dataset(train_dat, train_ann, train_samples)
         testing_dataset = self.get_torch_dataset(test_dat, test_ann, test_samples)
@@ -504,7 +508,11 @@ class DataImporter:
         
         print(f"[INFO] SMOTE complete: {len(target)} → {len(target_resampled)} samples")
         print(f"[INFO] Class distribution after SMOTE:\n{resampled_ann[target_col].value_counts()}")
-        
+        for x in smoted_data.keys():
+            nan_count = smoted_data[x].isna().sum().sum()
+            if nan_count > 0:
+                print(f"[WARNING] {nan_count} NaN values in SMOTE output for layer {x}, filling with 0")
+                smoted_data[x] = smoted_data[x].fillna(0)
         return smoted_data, resampled_ann
 
     def get_torch_dataset(self, dat, ann, samples):
