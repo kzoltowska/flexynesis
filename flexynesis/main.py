@@ -187,6 +187,12 @@ class HyperparameterTuning:
     
     def objective(self, params, current_step, total_steps, full_train = False):
         # Unpack or construct specific model arguments
+        _ds = self.dataset
+        class_weights = (
+            getattr(_ds, 'class_weights', None) or
+            getattr(getattr(_ds, 'multiomic_dataset', None), 'class_weights', {})
+        )
+
         model_args = {
             "config": params,
             "dataset": self.dataset,
@@ -195,9 +201,9 @@ class HyperparameterTuning:
             "surv_event_var": self.surv_event_var,
             "surv_time_var": self.surv_time_var,
             "use_loss_weighting": self.use_loss_weighting,
-            "device_type": self.device_type,
             "use_class_weights": self.use_class_weights,
-            "class_weights": getattr(self.dataset, 'class_weights', {}),
+            "class_weights": class_weights,  # ✅ resolved through wrapper
+            "device_type": self.device_type,
         }
         
         if self.model_class.__name__ == 'GNN':

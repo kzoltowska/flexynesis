@@ -1039,6 +1039,7 @@ class MultiOmicDatasetNW(Dataset):
         self.variable_types = self.multiomic_dataset.variable_types
         self.label_mappings = self.multiomic_dataset.label_mappings
         self.ann = self.multiomic_dataset.ann
+        self.class_weights = getattr(multiomic_dataset, 'class_weights', {})
 
         # Precompute all node features for all samples
         self.node_features_tensor = self.precompute_node_features()
