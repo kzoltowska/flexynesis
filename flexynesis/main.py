@@ -196,7 +196,8 @@ class HyperparameterTuning:
             "surv_time_var": self.surv_time_var,
             "use_loss_weighting": self.use_loss_weighting,
             "device_type": self.device_type,
-            "use_class_weights": self.use_class_weights
+            "use_class_weights": self.use_class_weights,
+            "class_weights": getattr(self.dataset, 'class_weights', {}),
         }
         
         if self.model_class.__name__ == 'GNN':

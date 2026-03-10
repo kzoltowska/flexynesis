@@ -65,7 +65,8 @@ class GNN(pl.LightningModule):
         use_loss_weighting=True,
         device_type = None,
         gnn_conv_type = None,
-        use_class_weights = False
+        use_class_weights = False,
+        class_weights=None
     ):
         super().__init__()
         self.config = config
@@ -85,7 +86,7 @@ class GNN(pl.LightningModule):
         self.feature_importances = {}
         self.use_loss_weighting = use_loss_weighting
         self.use_class_weights = use_class_weights
-        self.class_weights = getattr(dataset, 'class_weights', {})
+        self.class_weights = class_weights if class_weights is not None else getattr(dataset, 'class_weights', {})
         self.device_type = device_type 
         self.gnn_conv_type = gnn_conv_type
         

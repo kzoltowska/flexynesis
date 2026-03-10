@@ -32,7 +32,7 @@ class DirectPred(pl.LightningModule):
 
     def __init__(self, config, dataset, target_variables, batch_variables = None, 
                  surv_event_var = None, surv_time_var = None, use_loss_weighting = True, use_class_weights=False,
-                device_type = None):
+                device_type = None, class_weights=None):
         super(DirectPred, self).__init__()
         self.config = config
         self.target_variables = target_variables
@@ -48,7 +48,7 @@ class DirectPred(pl.LightningModule):
         self.use_loss_weighting = use_loss_weighting
         self.use_class_weights = use_class_weights
         self.device_type = device_type
-        self.class_weights = getattr(dataset, 'class_weights', {})
+        self.class_weights = class_weights if class_weights is not None else getattr(dataset, 'class_weights', {})
         
         if self.use_loss_weighting:
             # Initialize log variance parameters for uncertainty weighting
